@@ -1,0 +1,4 @@
+LIBRARY "w3lh.dll"
+EXPORTS
+GameMain
+star_do_hash
