@@ -41,7 +41,7 @@ void debug(char *message, ...);
 DWORD GetProcessBaseAddress(HANDLE hThread, HANDLE hProcess);
 
 /* offset in war3.exe that specifies the Game.dll to load */
-#define	GAME_DLL_127 (LPCVOID)0x131CA20
+#define	GAME_DLL_127 (LPCVOID)0x45CA20
 #define	GAME_DLL_125 (LPCVOID)0x456B9C
 #define	GAME_DLL_122 (LPCVOID)0x456B64
 #define GAME_DLL_118 (LPCVOID)0x4524D0
@@ -62,7 +62,7 @@ DWORD GetProcessBaseAddress(HANDLE hThread, HANDLE hProcess);
 #define WAR3_NOT_FOUND_ERR "Could not start War3.exe! Make sure the loader is in your Warcraft III install directory."
 #define DEP_PATCH_1 (LPCVOID)0x400169
 #define DEP_PATCH_2 (LPCVOID)0x40016F
-#define DEP_PATCH_3 (LPCVOID)0x12C0177
+#define DEP_PATCH_3 (LPCVOID)0x400177
 #define BASE_DEP_PATCH_1 (DWORD)0x169
 #define BASE_DEP_PATCH_2 (DWORD)0x16F
 #define BASE_DEP_PATCH_3 (DWORD)0x177
@@ -228,8 +228,9 @@ DWORD GetProcessBaseAddress(HANDLE hThread, HANDLE hProcess)
 	contx.ContextFlags = CONTEXT_ALL;
 	GetThreadContext(hThread, &contx);
 	ebx = contx.Ebx;
+	debug("Read ebx:0x%08X\r\n", ebx);
 	if (!ReadProcessMemory(hProcess, (LPCVOID)(ebx + 8), buf, 4, &numread)) {
-		debug("Can't read base address");
+		debug("Can't read base address\r\n");
 		return 0xFFFFFFFF;
 	}
 
