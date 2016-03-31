@@ -30,9 +30,7 @@
 #  endif
 #endif
 
-#include <windows.h>
-#include <stdio.h>
-#include <Winternl.h>
+#include "nodefaultlib.h"
 
 int InjectDll(PROCESS_INFORMATION processinfo, LPCVOID gameDllOffset, LPCVOID helper);
 int InjectByte(PROCESS_INFORMATION processinfo, LPCVOID offset, char byteOrig, char byteSet);
@@ -69,6 +67,7 @@ DWORD GetProcessBaseAddress(HANDLE hThread, HANDLE hProcess);
 
 unsigned char DEPPatchNew[] = { 0xF3, 0x00, 0x80};
 unsigned char DEPPatchOrig[] = { 0xF4, 0x01, 0x81};
+
 /* Load war3.exe. Patch its memory to replace Game.dll with the helper DLL.
    Once patched, resume war3.exe and exit. war3.exe will then load the helper dll and execute
    GameMain */
@@ -165,7 +164,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 
 	if(rval) {
 		TerminateProcess(processinfo.hProcess, 1);
-		snprintf(buf, 1024, "There was an error patching war3.exe (%s). Make sure you are using version %s.", errmsg, VERSION);
+		wsprintfA(buf, "There was an error patching war3.exe (%s). Make sure you are using version %s.", errmsg, VERSION);
 		MessageBoxA(0, buf, "Patch Error", MB_OK);
 		ExitProcess(3);
 	}
@@ -270,8 +269,7 @@ void debug(char *message, ...) {
 
 	memset(buf, 0, sizeof(buf));
 	va_start(args, message);
-	vsnprintf(buf, sizeof(buf) - 1, message, args);
-
+	wvsprintfA(buf, message, args);
 	file = CreateFile(L"debug.log", GENERIC_WRITE, 0, NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
 	SetFilePointer(file, 0, 0, FILE_END);
 	WriteFile(file, buf, (DWORD)strlen(buf), &temp, NULL);
