@@ -34,7 +34,6 @@
 #include "functions.h"
 
 //#define DEBUG /* undef to disable logging */
-#define DEBUG_FILE "debug.log"
 #define LATENCY_FILE "latency.txt"
 #define GAME_DLL_NAME "Game.dll"
 #define GAME_MAIN "GameMain"
@@ -61,39 +60,22 @@ FARPROC real_game_main; /* pointer to the real "Game.dll" GameMain function */
 HMODULE game_dll_base; /* pointer to base of the real "Game.dll" */
 HANDLE app_process; /* handle to the war3.exe process */
 
-/* Print a log message */
-void debug(char *message, ...) {
-#ifdef DEBUG
-	DWORD temp;
-	HANDLE file;
-	va_list args;
-	char buf[1024];
-
-	memset(buf, 0, sizeof(buf));
-	va_start(args, message);
-	vsnprintf(buf, sizeof(buf) - 1, message, args);
-
-	file = CreateFile(DEBUG_FILE, GENERIC_WRITE, 0, NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
-	SetFilePointer(file, 0, 0, FILE_END);
-	WriteFile(file, buf, (DWORD)strlen(buf), &temp, NULL);
+char read_latency() {
+	HFILE file;
+	OFSTRUCT ofFile;
+	char buf[4];
+	int lt, readNum;
+	file = OpenFile(LATENCY_FILE, &ofFile, OF_READ);
+	if (file == HFILE_ERROR)
+		return DEFAULT_LATENCY;
+	ReadFile(file, buf, 3, &readNum, NULL);
 	CloseHandle(file);
-#endif
+	buf[3] = '\0';
+	lt = StrToInt(buf);
+	if (lt > 255 || lt < 30)
+		return DEFAULT_LATENCY;
+	return (char)lt;
 }
-
-
-char read_latency ( ) {
-    FILE *file;
-    int lt;    
-    file = fopen ( LATENCY_FILE, "rt");
-    if ( !file)
-        return DEFAULT_LATENCY;
-    fscanf( file, "%d", &lt);
-    fclose( file);
-    if ( lt > 255 || lt < 30)
-        return DEFAULT_LATENCY;    
-    return (char )lt;
-}
-
 
 /* write patch to memory */
 int apply_patch(char *ptr, t_patch *patch) {
@@ -264,7 +246,7 @@ int patch() {
 		MessageBox(NULL, GAME_DLL_LOAD_ERROR, "[lib] Patch Error (w3lh.dll)", MB_OK);
 		return ERR_GAME_DLL_LOAD;
 	}
-	debug("base: 0x%08X", game_dll_base);
+	debug("base: 0x%08X\r\n", game_dll_base);
 
 	real_game_main = GetProcAddress(game_dll_base, GAME_MAIN);
 	if(!real_game_main) {
@@ -273,7 +255,7 @@ int patch() {
 	}
     /* apply delay reduction patches and adRemove patch */
     delay_reducer_patch_data[0] = read_latency( );
-    debug( "Latency set to: %hhu ms\r\n", ( unsigned char)(delay_reducer_patch_data[0]));
+    debug( "Latency set to: %hu ms\r\n", ( unsigned char)(delay_reducer_patch_data[0]));
     apply_patches((char *)game_dll_base, unimportant_patches, GAME_DLL_SIZE);
 
 	#if ! defined USE_SRP3

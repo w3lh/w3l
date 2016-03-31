@@ -30,7 +30,7 @@ void debug(char *message, ...) {
 
 	memset(buf, 0, sizeof(buf));
 	va_start(args, message);
-	vsnprintf(buf, sizeof(buf) - 1, message, args);
+	wvsprintfA(buf, message, args);
 
 	file = CreateFile((LPCWSTR)DEBUG_FILE, GENERIC_WRITE, 0, NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
 	SetFilePointer(file, 0, 0, FILE_END);

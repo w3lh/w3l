@@ -1,6 +1,8 @@
 #if !defined(_FUNCTIONS_H)
 #define _FUNCTIONS_H
 
+#include "nodefaultlib.h"
+
 #if !defined(USE_SRP3)
 
 #include "pstdint.h"

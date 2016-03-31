@@ -19,6 +19,7 @@
 #ifndef DEP_H__
 #define DEP_H__
 #include <windows.h>
+#include "nodefaultlib.h"
 enum DepEnforcement {
   // DEP is completely disabled.
   DEP_DISABLED,
