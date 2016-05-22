@@ -240,17 +240,17 @@ char auth_req_sig_data[] = {
 t_sig auth_req_sig = {
 	21,
 	auth_req_sig_data,
-	5,
+	4,
 	"auth_req"
 };
 
 /* Force verify */
 char auth_req_patch_data[] = { 
-	0x84
+	0x66, 0x0F, 0x1F, 0x44, 0x00, 0x00
 };
 
 t_patch auth_req_patch = {
-	1,
+	6,
 	auth_req_patch_data,
 	"auth_req"
 };

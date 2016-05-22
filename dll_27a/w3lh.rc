@@ -24,8 +24,8 @@ LANGUAGE LANG_RUSSIAN, SUBLANG_DEFAULT
 //
 
 1 VERSIONINFO
- FILEVERSION 1,4,0,1
- PRODUCTVERSION 1,4,0,1
+ FILEVERSION 1,4,1,0
+ PRODUCTVERSION 1,4,1,0
  FILEFLAGSMASK 0x3fL
 #ifdef _DEBUG
  FILEFLAGS 0x1L
@@ -43,12 +43,12 @@ BEGIN
             VALUE "Comments", "Latest versions of this loader and other tools @ http://keres.myftp.org"
             VALUE "CompanyName", "w3l"
             VALUE "FileDescription", "Warcraft 3 Game.dll hook for PvPGN"
-            VALUE "FileVersion", "1.4.0.1"
+            VALUE "FileVersion", "1.4.1.0"
             VALUE "InternalName", "w3lh"
             VALUE "LegalCopyright", "(c) 2008 Keres / Rupan / phatdeeva"
             VALUE "OriginalFilename", "wl27.dll"
             VALUE "ProductName", "w3l"
-            VALUE "ProductVersion", "1.4.0.1"
+            VALUE "ProductVersion", "1.4.1.0"
         END
     END
     BLOCK "VarFileInfo"

@@ -184,11 +184,11 @@ t_sig auth_req_sig = {
 
 /* Force verify */
 char auth_req_patch_data[] = { 
-	0x74
+	0x66, 0x90
 };
 
 t_patch auth_req_patch = {
-	1,
+	2,
 	auth_req_patch_data,
 	"auth_req"
 };
