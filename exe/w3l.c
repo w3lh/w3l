@@ -39,6 +39,7 @@ void debug(char *message, ...);
 DWORD GetProcessBaseAddress(HANDLE hThread, HANDLE hProcess);
 
 /* offset in war3.exe that specifies the Game.dll to load */
+#define	GAME_DLL_127B (LPCVOID)0x45CA24
 #define	GAME_DLL_127 (LPCVOID)0x45CA20
 #define	GAME_DLL_125 (LPCVOID)0x456B9C
 #define	GAME_DLL_122 (LPCVOID)0x456B64
@@ -46,6 +47,7 @@ DWORD GetProcessBaseAddress(HANDLE hThread, HANDLE hProcess);
 #define GAME_DLL_UNK (LPCVOID)0x4534d0
 
 /* offset in war3.exe from base address that specifies the Game.dll to load */
+#define	BASE_GAME_DLL_127B (LPCVOID)0x5CA24
 #define	BASE_GAME_DLL_127 (DWORD)0x5CA20
 #define	BASE_GAME_DLL_125 (DWORD)0x56B9C
 #define	BASE_GAME_DLL_122 (DWORD)0x56B64
@@ -58,15 +60,15 @@ DWORD GetProcessBaseAddress(HANDLE hThread, HANDLE hProcess);
 #define GAME_DLL_NAME "Game.dll" /* name of Game.dll (in case it changes) */
 #define GAME_DLL_NAME_LEN 8 /* Game.dll length */
 #define WAR3_NOT_FOUND_ERR "Could not start War3.exe! Make sure the loader is in your Warcraft III install directory."
-#define DEP_PATCH_1 (LPCVOID)0x400169
+#define DEP_PATCH_3 (LPCVOID)0x400169
 #define DEP_PATCH_2 (LPCVOID)0x40016F
-#define DEP_PATCH_3 (LPCVOID)0x400177
-#define BASE_DEP_PATCH_1 (DWORD)0x169
+#define DEP_PATCH_1 (LPCVOID)0x400177
+#define BASE_DEP_PATCH_3 (DWORD)0x169
 #define BASE_DEP_PATCH_2 (DWORD)0x16F
-#define BASE_DEP_PATCH_3 (DWORD)0x177
+#define BASE_DEP_PATCH_1 (DWORD)0x177
 
-unsigned char DEPPatchNew[] = { 0xF3, 0x00, 0x80};
-unsigned char DEPPatchOrig[] = { 0xF4, 0x01, 0x81};
+unsigned char DEPPatchNew[] = { 0x80, 0x00, 0xF3};
+unsigned char DEPPatchOrig[] = { 0x81, 0x01, 0xF4 };
 
 /* Load war3.exe. Patch its memory to replace Game.dll with the helper DLL.
    Once patched, resume war3.exe and exit. war3.exe will then load the helper dll and execute
@@ -83,6 +85,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 	char buf[1024];
 	int rval;
 	const LPCVOID game27_dll_offsets[] = {
+		GAME_DLL_127B,
 		GAME_DLL_127,		
 	};
 	const LPCVOID game_dll_offsets[] = {		
@@ -93,6 +96,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 	};
 
 	const DWORD base_game27_dll_offsets[] = {
+		BASE_GAME_DLL_127B,
 		BASE_GAME_DLL_127		
 	};
 	const DWORD base_game_dll_offsets[] = {
@@ -171,19 +175,27 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 /* Trying to patch exe for /NXCOMPAT:NO */
 	if (baseAddr == 0xFFFFFFFF) {
 		rval = InjectByte(processinfo, DEP_PATCH_1, DEPPatchOrig[0], DEPPatchNew[0]);
-		if (rval) debug("NXCOMPAT @ 0x%08X patching failed\r\n", DEP_PATCH_1);
-		rval = InjectByte(processinfo, DEP_PATCH_2, DEPPatchOrig[1], DEPPatchNew[1]);
-		if (rval) debug("NXCOMPAT @ 0x%08X patching failed\r\n", DEP_PATCH_2);
-		rval = InjectByte(processinfo, DEP_PATCH_3, DEPPatchOrig[2], DEPPatchNew[2]);
-		if (rval) debug("NXCOMPAT @ 0x%08X patching failed\r\n", DEP_PATCH_3);
+		if (rval) {
+			debug("NXCOMPAT @ 0x%08X patching failed\r\n", DEP_PATCH_1);
+			rval = InjectByte(processinfo, DEP_PATCH_2, DEPPatchOrig[1], DEPPatchNew[1]);
+			if (rval) { 
+				debug("NXCOMPAT @ 0x%08X patching failed\r\n", DEP_PATCH_2);
+				rval = InjectByte(processinfo, DEP_PATCH_3, DEPPatchOrig[2], DEPPatchNew[2]);
+				if (rval) debug("NXCOMPAT @ 0x%08X patching failed\r\n", DEP_PATCH_3);
+			}
+		}
 	}
 	else {
 		rval = InjectByte(processinfo, (LPCVOID)(baseAddr + BASE_DEP_PATCH_1), DEPPatchOrig[0], DEPPatchNew[0]);
-		if (rval) debug("NXCOMPAT @ 0x%08X patching failed\r\n", baseAddr + BASE_DEP_PATCH_1);
-		rval = InjectByte(processinfo, (LPCVOID) (baseAddr + BASE_DEP_PATCH_2), DEPPatchOrig[1], DEPPatchNew[1]);
-		if (rval) debug("NXCOMPAT @ 0x%08X patching failed\r\n", baseAddr + BASE_DEP_PATCH_2);
-		rval = InjectByte(processinfo, (LPCVOID)(baseAddr + BASE_DEP_PATCH_3), DEPPatchOrig[2], DEPPatchNew[2]);
-		if (rval) debug("NXCOMPAT @ 0x%08X patching failed\r\n", baseAddr + BASE_DEP_PATCH_3);
+		if (rval) {
+			debug("NXCOMPAT @ 0x%08X patching failed\r\n", baseAddr + BASE_DEP_PATCH_1);
+			rval = InjectByte(processinfo, (LPCVOID)(baseAddr + BASE_DEP_PATCH_2), DEPPatchOrig[1], DEPPatchNew[1]);
+			if (rval) {
+				debug("NXCOMPAT @ 0x%08X patching failed\r\n", baseAddr + BASE_DEP_PATCH_2);
+				rval = InjectByte(processinfo, (LPCVOID)(baseAddr + BASE_DEP_PATCH_3), DEPPatchOrig[2], DEPPatchNew[2]);
+				if (rval) debug("NXCOMPAT @ 0x%08X patching failed\r\n", baseAddr + BASE_DEP_PATCH_3);
+			}
+		}
 	}
 	
 	ResumeThread(processinfo.hThread);
