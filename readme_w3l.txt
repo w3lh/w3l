@@ -24,6 +24,9 @@ Latest releases of w3l @ http://keres.myftp.org
 PvPGN forums @ http://pelish.spfree.net/
 
 Changelog:
+ Version 1.4.2.0
+   * Added 1.27b version support
+
  Version 1.4.1.0
    * Allows connect to official BNet through GProxy
 
