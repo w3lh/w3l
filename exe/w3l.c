@@ -47,7 +47,7 @@ DWORD GetProcessBaseAddress(HANDLE hThread, HANDLE hProcess);
 #define GAME_DLL_UNK (LPCVOID)0x4534d0
 
 /* offset in war3.exe from base address that specifies the Game.dll to load */
-#define	BASE_GAME_DLL_127B (LPCVOID)0x5CA24
+#define	BASE_GAME_DLL_127B (DWORD)0x5CA24
 #define	BASE_GAME_DLL_127 (DWORD)0x5CA20
 #define	BASE_GAME_DLL_125 (DWORD)0x56B9C
 #define	BASE_GAME_DLL_122 (DWORD)0x56B64
@@ -119,7 +119,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 	debug("base: %x\r\n", baseAddr);
 	
     // 1.27a+
-	for (i = 0; i<1; i++) {
+	for (i = 0; i < 2; i++) {
 		if (baseAddr == 0xFFFFFFFF) {
 			debug("[w3l] Trying offset 0x%08X... ", game27_dll_offsets[i]);
 			rval = InjectDll(processinfo, game27_dll_offsets[i], &HELPER27_DLL_NAME);
