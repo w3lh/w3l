@@ -40,7 +40,7 @@ BEGIN
     BEGIN
         BLOCK "040904e4"
         BEGIN
-            VALUE "Comments", "Latest versions of this loader and other tools @ http://keres.myftp.org"
+            VALUE "Comments", "Latest versions of this loader and other tools @ https://github.com/w3lh"
             VALUE "CompanyName", "w3l"
             VALUE "FileDescription", "Warcraft 3 Game.dll hook for PvPGN"
             VALUE "FileVersion", "1.4.2.0"

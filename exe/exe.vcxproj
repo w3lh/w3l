@@ -56,7 +56,7 @@
     <_ProjectFileVersion>14.0.24730.2</_ProjectFileVersion>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
-    <OutDir>M:\Games\Warcraft III 1.27a. R.G. Catalyst\</OutDir>
+    <OutDir>..\..\..\Games\Warcraft III 1.28a</OutDir>
     <IntDir>$(Configuration)\</IntDir>
     <LinkIncremental>true</LinkIncremental>
     <IncludePath>$(VC_IncludePath);$(WindowsSdk_71A_IncludePath);$(WindowsSDK_IncludePath);$(IncludePath)</IncludePath>

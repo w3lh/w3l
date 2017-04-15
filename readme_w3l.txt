@@ -20,10 +20,13 @@ Thanks:
 Thanks to ACiD for their 1.18a patch and source, to phatdeeva and gr11x for the initial work on the new patch, to Rupan for the C port of w3l.asm, the posting of the ACiD patch source, and various fixes to the source, to the PvPGN and bnetd contributors, and to Blizzard for making such a fantastic game. 
 Thanks to Keres on the PvPGN forums for releasing fixes and updates, and to all who helped test and debug this release there. Thanks to Google Chrome developers for DEP disabling method. Thanks to Phoenicks on the Bored Aussie forums for ad blocking patch and 1.25b game.dll offset.
 
-Latest releases of w3l @ http://keres.myftp.org
+Latest releases of w3l @ https://github.com/w3lh/w3l/releases 
 PvPGN forums @ http://pelish.spfree.net/
 
 Changelog:
+ Version 1.4.2.2
+   * Added 1.28 version support
+
  Version 1.4.2.0
    * Added 1.27b version support
 
