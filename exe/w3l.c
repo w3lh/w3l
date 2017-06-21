@@ -47,6 +47,9 @@ DWORD GetProcessBaseAddress(HANDLE hThread, HANDLE hProcess);
 #define GAME_DLL_118 (LPCVOID)0x4524D0
 #define GAME_DLL_UNK (LPCVOID)0x4534d0
 
+/* offset in Warcraft III.exe from base address that specifies the Game.dll to load */
+#define	BASE_GAME_DLL_128D (DWORD)0x61A64
+
 /* offset in war3.exe from base address that specifies the Game.dll to load */
 #define	BASE_GAME_DLL_128 (DWORD)0x60A64
 #define	BASE_GAME_DLL_127B (DWORD)0x5CA24
@@ -93,13 +96,19 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 		GAME_DLL_127B,
 		GAME_DLL_127,
 	};
+	const LPCVOID game28_dll_offsets[] = {
+		BASE_GAME_DLL_128D + 0x400000,		
+	};
 	const LPCVOID game_dll_offsets[] = {
 		GAME_DLL_125,
 		GAME_DLL_122,
 		GAME_DLL_118,
 		GAME_DLL_UNK
 	};
-
+	
+	const DWORD base_game28_dll_offsets[] = {
+		BASE_GAME_DLL_128D,
+	};
 	const DWORD base_game27_dll_offsets[] = {
 		BASE_GAME_DLL_128,
 		BASE_GAME_DLL_127B,
@@ -116,24 +125,24 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 	GetStartupInfo(&startupinfo);
 	commandline = GetCommandLine();
 
-	if (!CreateProcess(L"war3.exe", commandline, 0, 0, FALSE, CREATE_SUSPENDED, 0, 0, &startupinfo, &processinfo)) {
+	// First try Warcrat III.exe
+	if (!CreateProcess(L"Warcraft III.exe", commandline, 0, 0, FALSE, CREATE_SUSPENDED, 0, 0, &startupinfo, &processinfo)) {
 		MessageBoxA(0, WAR3_NOT_FOUND_ERR, "Error", MB_OK);
 		ExitProcess(2);
 	}
-
+	debug("Warcraft III.exe:\r\n");
 	baseAddr = GetProcessBaseAddress(processinfo.hThread, processinfo.hProcess);
 	debug("base: %x\r\n", baseAddr);
-
-	// 1.27a+
-	for (i = 0; i < 2; i++) {
+	
+	// 1.28d+
+	for (i = 0; i < 1; i++) {
 		if (baseAddr == 0xFFFFFFFF) {
-			debug("[w3l] Trying offset 0x%08X... ", game27_dll_offsets[i]);
-			rval = InjectDll(processinfo, game27_dll_offsets[i], &HELPER27_DLL_NAME);
+			debug("[w3l] Trying offset 0x%08X... ", game28_dll_offsets[i]);
+			rval = InjectDll(processinfo, game28_dll_offsets[i], &HELPER27_DLL_NAME);
 		}
 		else {
-			debug("[w3l] Trying base offset 0x%08X with base 0x%08X...", base_game27_dll_offsets[i], baseAddr);
-			rval = InjectDll(processinfo, (LPCVOID)(baseAddr + base_game27_dll_offsets[i]), &HELPER27_DLL_NAME);
-
+			debug("[w3l] Trying base offset 0x%08X with base 0x%08X...", base_game28_dll_offsets[i], baseAddr);
+			rval = InjectDll(processinfo, (LPCVOID)(baseAddr + base_game28_dll_offsets[i]), &HELPER27_DLL_NAME);
 		}
 		if (rval == 0) {
 			debug("Success.\r\n");
@@ -146,21 +155,31 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 		else if (rval == 3) errmsg = "Unable to set page permissions";
 		debug("%s\r\n", errmsg);
 	}
-	// 1.22a +
 	if (applied == FALSE) {
+		TerminateProcess(processinfo.hProcess, 1);
+		if (!CreateProcess(L"war3.exe", commandline, 0, 0, FALSE, CREATE_SUSPENDED, 0, 0, &startupinfo, &processinfo)) {
+			MessageBoxA(0, WAR3_NOT_FOUND_ERR, "Error", MB_OK);
+			ExitProcess(2);
+		}
 
-		for (i = 0; i < 5; i++) {
+		baseAddr = GetProcessBaseAddress(processinfo.hThread, processinfo.hProcess);
+		debug("War3.exe:\r\n");
+		debug("base: %x\r\n", baseAddr);
+
+		// 1.27a+
+		for (i = 0; i < 2; i++) {
 			if (baseAddr == 0xFFFFFFFF) {
-				debug("[w3l] Trying offset 0x%08X... ", game_dll_offsets[i]);
-				rval = InjectDll(processinfo, game_dll_offsets[i], &HELPER_DLL_NAME);
+				debug("[w3l] Trying offset 0x%08X... ", game27_dll_offsets[i]);
+				rval = InjectDll(processinfo, game27_dll_offsets[i], &HELPER27_DLL_NAME);
 			}
 			else {
-				debug("[w3l] Trying base offset 0x%08X with base 0x%08X...", base_game_dll_offsets[i], baseAddr);
-				rval = InjectDll(processinfo, (LPCVOID)(baseAddr + base_game_dll_offsets[i]), &HELPER_DLL_NAME);
+				debug("[w3l] Trying base offset 0x%08X with base 0x%08X...", base_game27_dll_offsets[i], baseAddr);
+				rval = InjectDll(processinfo, (LPCVOID)(baseAddr + base_game27_dll_offsets[i]), &HELPER27_DLL_NAME);
 
 			}
 			if (rval == 0) {
 				debug("Success.\r\n");
+				applied = TRUE;
 				break;
 			}
 			else if (rval == -1) errmsg = "Bad offset";
@@ -169,9 +188,32 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 			else if (rval == 3) errmsg = "Unable to set page permissions";
 			debug("%s\r\n", errmsg);
 		}
+		// 1.22a +
+		if (applied == FALSE) {
+
+			for (i = 0; i < 5; i++) {
+				if (baseAddr == 0xFFFFFFFF) {
+					debug("[w3l] Trying offset 0x%08X... ", game_dll_offsets[i]);
+					rval = InjectDll(processinfo, game_dll_offsets[i], &HELPER_DLL_NAME);
+				}
+				else {
+					debug("[w3l] Trying base offset 0x%08X with base 0x%08X...", base_game_dll_offsets[i], baseAddr);
+					rval = InjectDll(processinfo, (LPCVOID)(baseAddr + base_game_dll_offsets[i]), &HELPER_DLL_NAME);
+
+				}
+				if (rval == 0) {
+					debug("Success.\r\n");
+					break;
+				}
+				else if (rval == -1) errmsg = "Bad offset";
+				else if (rval == 1) errmsg = "Unable to read memory";
+				else if (rval == 2) errmsg = "Unable to write memory";
+				else if (rval == 3) errmsg = "Unable to set page permissions";
+				debug("%s\r\n", errmsg);
+			}
+		}
+
 	}
-
-
 	if (rval) {
 		TerminateProcess(processinfo.hProcess, 1);
 		wsprintfA(buf, "There was an error patching war3.exe (%s). Make sure you are using version %s.", errmsg, VERSION);
@@ -223,6 +265,7 @@ int InjectDll(PROCESS_INFORMATION processinfo, LPCVOID offset, LPCVOID helper) {
 	if (!ReadProcessMemory(processinfo.hProcess, offset, buf, GAME_DLL_NAME_LEN, &numread)) {
 		return 1; /* +1 indicates a memory read error */
 	}
+	// debug("data at 0x%08X: %x %x %x %x %x %x %x %x\r\n", offset, buf[0], buf[1], buf[2], buf[3], buf[4], buf[5], buf[6], buf[7]);
 	if (memcmp(buf, GAME_DLL_NAME, GAME_DLL_NAME_LEN)) {
 		return -1; /* -1 indicates a bad offset */
 	}

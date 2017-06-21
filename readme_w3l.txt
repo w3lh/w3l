@@ -7,12 +7,13 @@ Use at your own risk.
 Using: 
 Place w3l.exe, w3lh.dll and wl27.dll into your Warcraft III directory. 
 Run 'w3l.exe' when you want to connect to a PvPGN server. 
-Run 'war3.exe' when you want to connect to battle.net. 
+Run 'war3.exe' or Warcraft III.exe(1.28d+) when you want to connect to battle.net. 
 You can set delay value in file latency.txt. The proper delay value lies between 30 and 255. If wrong value is set or file is missed, delay value will be set to 100 ms. Default Blizzard's value is 250.
 
 Notes: 
 To play RoC when you have TFT expansion installed, run 'w3l.exe -classic' 
-To play in windowed mode, run 'w3l.exe -window' 
+To play in windowed mode, run 'w3l.exe -window'
+To play in nativew full screed mode, run 'w3l.exe -nativefullscr' (1.28+ only)
 If you connect to battle.net while running w3l.exe, you risk getting your cd-key banned. 
 
 
@@ -24,6 +25,9 @@ Latest releases of w3l @ https://github.com/w3lh/w3l/releases
 PvPGN forums @ http://pelish.spfree.net/
 
 Changelog:
+ Version 1.5.0.0
+   * Added 1.28d version support
+
  Version 1.4.2.2
    * Added 1.28 version support
 
