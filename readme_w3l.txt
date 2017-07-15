@@ -25,6 +25,10 @@ Latest releases of w3l @ https://github.com/w3lh/w3l/releases
 PvPGN forums @ http://pelish.spfree.net/
 
 Changelog:
+
+ Version 1.5.0.1
+   * Added 1.28e version support
+
  Version 1.5.0.0
    * Added 1.28d version support
 

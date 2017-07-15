@@ -49,6 +49,7 @@ DWORD GetProcessBaseAddress(HANDLE hThread, HANDLE hProcess);
 
 /* offset in Warcraft III.exe from base address that specifies the Game.dll to load */
 #define	BASE_GAME_DLL_128D (DWORD)0x61A64
+#define	BASE_GAME_DLL_128E (DWORD)0x61A74
 
 /* offset in war3.exe from base address that specifies the Game.dll to load */
 #define	BASE_GAME_DLL_128 (DWORD)0x60A64
@@ -97,7 +98,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 		GAME_DLL_127,
 	};
 	const LPCVOID game28_dll_offsets[] = {
-		BASE_GAME_DLL_128D + 0x400000,		
+		BASE_GAME_DLL_128E + 0x400000,
+		BASE_GAME_DLL_128D + 0x400000,
 	};
 	const LPCVOID game_dll_offsets[] = {
 		GAME_DLL_125,
@@ -107,6 +109,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 	};
 	
 	const DWORD base_game28_dll_offsets[] = {
+		BASE_GAME_DLL_128E,
 		BASE_GAME_DLL_128D,
 	};
 	const DWORD base_game27_dll_offsets[] = {
@@ -135,7 +138,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 	debug("base: %x\r\n", baseAddr);
 	
 	// 1.28d+
-	for (i = 0; i < 1; i++) {
+	for (i = 0; i < 2; i++) {
 		if (baseAddr == 0xFFFFFFFF) {
 			debug("[w3l] Trying offset 0x%08X... ", game28_dll_offsets[i]);
 			rval = InjectDll(processinfo, game28_dll_offsets[i], &HELPER27_DLL_NAME);
