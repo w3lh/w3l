@@ -17,7 +17,6 @@
 
 */
 
-
 #ifdef _MSC_VER
 //#  undef UNICODE
 #  if _MSC_VER>=1900
@@ -31,12 +30,15 @@
 #endif
 
 #include "nodefaultlib.h"
+#include <tchar.h>
 
 int InjectDll(PROCESS_INFORMATION processinfo, LPCVOID gameDllOffset, LPCVOID helper);
 int InjectByte(PROCESS_INFORMATION processinfo, LPCVOID offset, char byteOrig, char byteSet);
 void debug(char *message, ...);
 
 DWORD GetProcessBaseAddress(HANDLE hThread, HANDLE hProcess);
+DWORD GetProcessBaseAddressWinapi(HANDLE hProcess);
+HMODULE sm_LoadNTDLLFunctions();
 
 /* offset in war3.exe that specifies the Game.dll to load */
 #define	GAME_DLL_128 (LPCVOID)0x460A64
@@ -78,6 +80,75 @@ DWORD GetProcessBaseAddress(HANDLE hThread, HANDLE hProcess);
 unsigned char DEPPatchNew[] = { 0x80, 0x00, 0xF3 };
 unsigned char DEPPatchOrig[] = { 0x81, 0x01, 0xF4 };
 
+// Used in PEB struct
+typedef ULONG smPPS_POST_PROCESS_INIT_ROUTINE;
+
+// Used in PEB struct
+typedef struct _smPEB_LDR_DATA {
+	BYTE Reserved1[8];
+	PVOID Reserved2[3];
+	LIST_ENTRY InMemoryOrderModuleList;
+} smPEB_LDR_DATA, *smPPEB_LDR_DATA;
+
+// Used in PEB struct
+typedef struct _smRTL_USER_PROCESS_PARAMETERS {
+	BYTE Reserved1[16];
+	PVOID Reserved2[10];
+	UNICODE_STRING ImagePathName;
+	UNICODE_STRING CommandLine;
+} smRTL_USER_PROCESS_PARAMETERS, *smPRTL_USER_PROCESS_PARAMETERS;
+
+// Used in PROCESS_BASIC_INFORMATION struct
+typedef struct _smPEB {
+	BYTE Reserved1[2];
+	BYTE BeingDebugged;
+	BYTE Reserved2[1];
+	PVOID Reserved3[2];
+	smPPEB_LDR_DATA Ldr;
+	smPRTL_USER_PROCESS_PARAMETERS ProcessParameters;
+	BYTE Reserved4[104];
+	PVOID Reserved5[52];
+	smPPS_POST_PROCESS_INIT_ROUTINE PostProcessInitRoutine;
+	BYTE Reserved6[128];
+	PVOID Reserved7[1];
+	ULONG SessionId;
+} smPEB, *smPPEB;
+
+// Used with NtQueryInformationProcess
+typedef struct _smPROCESS_BASIC_INFORMATION {
+	LONG ExitStatus;
+	smPPEB PebBaseAddress;
+	ULONG_PTR AffinityMask;
+	LONG BasePriority;
+	ULONG_PTR UniqueProcessId;
+	ULONG_PTR InheritedFromUniqueProcessId;
+} smPROCESS_BASIC_INFORMATION, *smPPROCESS_BASIC_INFORMATION;
+
+// NtQueryInformationProcess in NTDLL.DLL
+typedef NTSTATUS(NTAPI *pfnNtQueryInformationProcess)(
+	IN	HANDLE ProcessHandle,
+	IN	PROCESSINFOCLASS ProcessInformationClass,
+	OUT	PVOID ProcessInformation,
+	IN	ULONG ProcessInformationLength,
+	OUT	PULONG ReturnLength	OPTIONAL
+	);
+
+pfnNtQueryInformationProcess gNtQueryInformationProcess;
+
+typedef struct _smPROCESSINFO
+{
+	DWORD	dwPID;
+	DWORD	dwParentPID;
+	DWORD	dwSessionID;
+	DWORD	dwPEBBaseAddress;
+	DWORD	dwAffinityMask;
+	LONG	dwBasePriority;
+	LONG	dwExitStatus;
+	BYTE	cBeingDebugged;
+	TCHAR	szImgPath[MAX_PATH];
+	TCHAR	szCmdLine[MAX_PATH];
+} smPROCESSINFO;
+
 /* Load war3.exe. Patch its memory to replace Game.dll with the helper DLL.
    Once patched, resume war3.exe and exit. war3.exe will then load the helper dll and execute
    GameMain */
@@ -111,6 +182,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 	const DWORD base_game28_dll_offsets[] = {
 		BASE_GAME_DLL_128E,
 		BASE_GAME_DLL_128D,
+		BASE_GAME_DLL_128E,
 	};
 	const DWORD base_game27_dll_offsets[] = {
 		BASE_GAME_DLL_128,
@@ -134,7 +206,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 		ExitProcess(2);
 	}
 	debug("Warcraft III.exe:\r\n");
-	baseAddr = GetProcessBaseAddress(processinfo.hThread, processinfo.hProcess);
+	baseAddr = GetProcessBaseAddressWinapi(processinfo.hProcess);
 	debug("base: %x\r\n", baseAddr);
 	
 	// 1.28d+
@@ -146,6 +218,13 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 		else {
 			debug("[w3l] Trying base offset 0x%08X with base 0x%08X...", base_game28_dll_offsets[i], baseAddr);
 			rval = InjectDll(processinfo, (LPCVOID)(baseAddr + base_game28_dll_offsets[i]), &HELPER27_DLL_NAME);
+
+			if (rval != 0) {
+				baseAddr = GetProcessBaseAddress(processinfo.hThread, processinfo.hProcess);
+				debug("base: %x\r\n", baseAddr);
+				debug("[w3l] Trying base offset 0x%08X with base 0x%08X...", base_game28_dll_offsets[i], baseAddr);
+				rval = InjectDll(processinfo, (LPCVOID)(baseAddr + base_game28_dll_offsets[i]), &HELPER27_DLL_NAME);
+			}
 		}
 		if (rval == 0) {
 			debug("Success.\r\n");
@@ -305,6 +384,95 @@ DWORD GetProcessBaseAddress(HANDLE hThread, HANDLE hProcess)
 
 	baseAddress = *(DWORD*)buf;
 	return baseAddress;
+}
+
+DWORD GetProcessBaseAddressWinapi(HANDLE hProcess)
+{
+	sm_LoadNTDLLFunctions();
+
+	debug("NtQueryInformationProcess start\r\n");
+
+	DWORD   baseAddress = 0xFFFFFFFF;
+	
+	DWORD dwSize = 0;
+	DWORD dwSizeNeeded = 0;
+	DWORD dwBytesRead = 0;
+	DWORD dwBufferSize = 0;
+	HANDLE hHeap = 0;
+	WCHAR *pwszBuffer = NULL;
+
+	smPPROCESS_BASIC_INFORMATION pbi = NULL;
+
+	// Attempt to access process
+	if (hProcess == INVALID_HANDLE_VALUE) {
+		debug("Invalid hProcess handle\r\n");
+		return baseAddress;
+	}
+
+	// Try to allocate buffer 
+	hHeap = GetProcessHeap();
+
+	dwSize = sizeof(smPROCESS_BASIC_INFORMATION);
+
+	pbi = (smPPROCESS_BASIC_INFORMATION)HeapAlloc(hHeap, HEAP_ZERO_MEMORY, dwSize);
+	
+	// Did we successfully allocate memory
+	if (!pbi) {
+		debug("Faield to allocate pbi\r\n");
+		return baseAddress;
+	}
+
+	// Attempt to get basic info on process
+	NTSTATUS dwStatus = gNtQueryInformationProcess(hProcess,
+		ProcessBasicInformation,
+		pbi,
+		dwSize,
+		&dwSizeNeeded);
+
+	// If we had error and buffer was too small, try again
+	// with larger buffer size (dwSizeNeeded)
+	if (dwStatus >= 0 && dwSize < dwSizeNeeded)
+	{
+		if (pbi)
+			HeapFree(hHeap, 0, pbi);
+		pbi = (smPPROCESS_BASIC_INFORMATION)HeapAlloc(hHeap, HEAP_ZERO_MEMORY, dwSizeNeeded);
+		if (!pbi) {
+			debug("Failed to alloc pbi\r\n");
+			return baseAddress;
+		}
+
+		dwStatus = gNtQueryInformationProcess(hProcess,
+			ProcessBasicInformation,
+			pbi, dwSizeNeeded, &dwSizeNeeded);
+	}
+
+	// Did we successfully get basic info on process
+	if (dwStatus >= 0)
+	{
+		debug("NtQueryInformationProcess success\r\n");
+		baseAddress = (DWORD)pbi->PebBaseAddress;
+	}
+	return baseAddress;
+}
+
+HMODULE sm_LoadNTDLLFunctions()
+{
+	HMODULE hNtDll = LoadLibrary(_T("ntdll.dll"));
+	if (hNtDll == NULL) {
+		debug("LoadLibrary ntdll failed\r\n");
+		return NULL;
+	}
+
+	gNtQueryInformationProcess = (pfnNtQueryInformationProcess)GetProcAddress(hNtDll, "NtQueryInformationProcess");
+	if (gNtQueryInformationProcess == NULL) {
+		FreeLibrary(hNtDll);
+		debug("gNtQueryInformationProcess definition failed\r\n");
+		return NULL;
+	}
+
+	debug("LoadNTDLLFunctions success\r\n");
+
+	return hNtDll;
 }
 
 /* write to process memory at offset */
