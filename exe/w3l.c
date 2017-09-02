@@ -31,6 +31,7 @@
 
 #include "nodefaultlib.h"
 #include <tchar.h>
+#include "peb.h"
 
 int InjectDll(PROCESS_INFORMATION processinfo, LPCVOID gameDllOffset, LPCVOID helper);
 int InjectByte(PROCESS_INFORMATION processinfo, LPCVOID offset, char byteOrig, char byteSet);
@@ -79,75 +80,6 @@ HMODULE sm_LoadNTDLLFunctions();
 
 unsigned char DEPPatchNew[] = { 0x80, 0x00, 0xF3 };
 unsigned char DEPPatchOrig[] = { 0x81, 0x01, 0xF4 };
-
-// Used in PEB struct
-typedef ULONG smPPS_POST_PROCESS_INIT_ROUTINE;
-
-// Used in PEB struct
-typedef struct _smPEB_LDR_DATA {
-	BYTE Reserved1[8];
-	PVOID Reserved2[3];
-	LIST_ENTRY InMemoryOrderModuleList;
-} smPEB_LDR_DATA, *smPPEB_LDR_DATA;
-
-// Used in PEB struct
-typedef struct _smRTL_USER_PROCESS_PARAMETERS {
-	BYTE Reserved1[16];
-	PVOID Reserved2[10];
-	UNICODE_STRING ImagePathName;
-	UNICODE_STRING CommandLine;
-} smRTL_USER_PROCESS_PARAMETERS, *smPRTL_USER_PROCESS_PARAMETERS;
-
-// Used in PROCESS_BASIC_INFORMATION struct
-typedef struct _smPEB {
-	BYTE Reserved1[2];
-	BYTE BeingDebugged;
-	BYTE Reserved2[1];
-	PVOID Reserved3[2];
-	smPPEB_LDR_DATA Ldr;
-	smPRTL_USER_PROCESS_PARAMETERS ProcessParameters;
-	BYTE Reserved4[104];
-	PVOID Reserved5[52];
-	smPPS_POST_PROCESS_INIT_ROUTINE PostProcessInitRoutine;
-	BYTE Reserved6[128];
-	PVOID Reserved7[1];
-	ULONG SessionId;
-} smPEB, *smPPEB;
-
-// Used with NtQueryInformationProcess
-typedef struct _smPROCESS_BASIC_INFORMATION {
-	LONG ExitStatus;
-	smPPEB PebBaseAddress;
-	ULONG_PTR AffinityMask;
-	LONG BasePriority;
-	ULONG_PTR UniqueProcessId;
-	ULONG_PTR InheritedFromUniqueProcessId;
-} smPROCESS_BASIC_INFORMATION, *smPPROCESS_BASIC_INFORMATION;
-
-// NtQueryInformationProcess in NTDLL.DLL
-typedef NTSTATUS(NTAPI *pfnNtQueryInformationProcess)(
-	IN	HANDLE ProcessHandle,
-	IN	PROCESSINFOCLASS ProcessInformationClass,
-	OUT	PVOID ProcessInformation,
-	IN	ULONG ProcessInformationLength,
-	OUT	PULONG ReturnLength	OPTIONAL
-	);
-
-pfnNtQueryInformationProcess gNtQueryInformationProcess;
-
-typedef struct _smPROCESSINFO
-{
-	DWORD	dwPID;
-	DWORD	dwParentPID;
-	DWORD	dwSessionID;
-	DWORD	dwPEBBaseAddress;
-	DWORD	dwAffinityMask;
-	LONG	dwBasePriority;
-	LONG	dwExitStatus;
-	BYTE	cBeingDebugged;
-	TCHAR	szImgPath[MAX_PATH];
-	TCHAR	szCmdLine[MAX_PATH];
-} smPROCESSINFO;
 
 /* Load war3.exe. Patch its memory to replace Game.dll with the helper DLL.
    Once patched, resume war3.exe and exit. war3.exe will then load the helper dll and execute
@@ -207,7 +139,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 	}
 	debug("Warcraft III.exe:\r\n");
 	baseAddr = GetProcessBaseAddressWinapi(processinfo.hProcess);
-	debug("base: %x\r\n", baseAddr);
+	debug("base winapi: %x\r\n", baseAddr);
 	
 	// 1.28d+
 	for (i = 0; i < 2; i++) {
@@ -218,13 +150,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 		else {
 			debug("[w3l] Trying base offset 0x%08X with base 0x%08X...", base_game28_dll_offsets[i], baseAddr);
 			rval = InjectDll(processinfo, (LPCVOID)(baseAddr + base_game28_dll_offsets[i]), &HELPER27_DLL_NAME);
-
-			if (rval != 0) {
-				baseAddr = GetProcessBaseAddress(processinfo.hThread, processinfo.hProcess);
-				debug("base: %x\r\n", baseAddr);
-				debug("[w3l] Trying base offset 0x%08X with base 0x%08X...", base_game28_dll_offsets[i], baseAddr);
-				rval = InjectDll(processinfo, (LPCVOID)(baseAddr + base_game28_dll_offsets[i]), &HELPER27_DLL_NAME);
-			}
 		}
 		if (rval == 0) {
 			debug("Success.\r\n");
@@ -244,7 +169,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 			ExitProcess(2);
 		}
 
-		baseAddr = GetProcessBaseAddress(processinfo.hThread, processinfo.hProcess);
+		baseAddr = GetProcessBaseAddressWinapi(processinfo.hProcess);
 		debug("War3.exe:\r\n");
 		debug("base: %x\r\n", baseAddr);
 
@@ -437,7 +362,7 @@ DWORD GetProcessBaseAddressWinapi(HANDLE hProcess)
 			HeapFree(hHeap, 0, pbi);
 		pbi = (smPPROCESS_BASIC_INFORMATION)HeapAlloc(hHeap, HEAP_ZERO_MEMORY, dwSizeNeeded);
 		if (!pbi) {
-			debug("Failed to alloc pbi\r\n");
+			debug("Failed to allocate pbi\r\n");
 			return baseAddress;
 		}
 
@@ -451,6 +376,14 @@ DWORD GetProcessBaseAddressWinapi(HANDLE hProcess)
 	{
 		debug("NtQueryInformationProcess success\r\n");
 		baseAddress = (DWORD)pbi->PebBaseAddress;
+
+		SIZE_T numread = 0;
+		char buf[4];
+		if (!ReadProcessMemory(hProcess, (LPCVOID)(baseAddress + 8), buf, 4, &numread)) {
+			debug("Can't read base address (winapi)\r\n");
+			return 0xFFFFFFFF;
+		}
+		baseAddress = *(DWORD*)buf;
 	}
 	return baseAddress;
 }
