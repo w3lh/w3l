@@ -170,7 +170,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 		debug("base: %x\r\n", baseAddr);
 
 		// 1.27a+
-		for (i = 0; i < 2; i++) {
+		for (i = 0; i < 3; i++) {
 			if (baseAddr == 0xFFFFFFFF) {
 				debug("[w3l] Trying offset 0x%08X... ", game27_dll_offsets[i]);
 				rval = InjectDll(processinfo, game27_dll_offsets[i], &HELPER27_DLL_NAME);
