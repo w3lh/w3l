@@ -42,14 +42,18 @@ DWORD GetProcessBaseAddressEbx(HANDLE hThread, HANDLE hProcess);
 DWORD GetProcessBaseAddressWinapi(HANDLE hProcess);
 HMODULE sm_LoadNTDLLFunctions();
 
+/* offset in Warcraft III.exe that specifies the Game.dll to load */
+#define	GAME_DLL_128D (LPCVOID)0x461A64
+#define	GAME_DLL_128E (LPCVOID)0x461A74
+
 /* offset in war3.exe that specifies the Game.dll to load */
-#define	GAME_DLL_128 (LPCVOID)0x460A64
+#define	GAME_DLL_128  (LPCVOID)0x460A64
 #define	GAME_DLL_127B (LPCVOID)0x45CA24
-#define	GAME_DLL_127 (LPCVOID)0x45CA20
-#define	GAME_DLL_125 (LPCVOID)0x456B9C
-#define	GAME_DLL_122 (LPCVOID)0x456B64
-#define GAME_DLL_118 (LPCVOID)0x4524D0
-#define GAME_DLL_UNK (LPCVOID)0x4534d0
+#define	GAME_DLL_127  (LPCVOID)0x45CA20
+#define	GAME_DLL_125  (LPCVOID)0x456B9C
+#define	GAME_DLL_122  (LPCVOID)0x456B64
+#define GAME_DLL_118  (LPCVOID)0x4524D0
+#define GAME_DLL_UNK  (LPCVOID)0x4534d0
 
 /* offset in Warcraft III.exe from base address that specifies the Game.dll to load */
 #define	BASE_GAME_DLL_128D (DWORD)0x61A64
@@ -103,8 +107,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 		GAME_DLL_127,
 	};
 	const LPCVOID game28_dll_offsets[] = {
-		BASE_GAME_DLL_128E + 0x400000,
-		BASE_GAME_DLL_128D + 0x400000,
+		GAME_DLL_128E,
+		GAME_DLL_128D,
 	};
 	const LPCVOID game_dll_offsets[] = {
 		GAME_DLL_125,
