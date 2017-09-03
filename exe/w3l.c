@@ -38,6 +38,7 @@ int InjectByte(PROCESS_INFORMATION processinfo, LPCVOID offset, char byteOrig, c
 void debug(char *message, ...);
 
 DWORD GetProcessBaseAddress(HANDLE hThread, HANDLE hProcess);
+DWORD GetProcessBaseAddressEbx(HANDLE hThread, HANDLE hProcess);
 DWORD GetProcessBaseAddressWinapi(HANDLE hProcess);
 HMODULE sm_LoadNTDLLFunctions();
 
@@ -95,6 +96,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 	const char *errmsg;
 	char buf[1024];
 	int rval;
+
 	const LPCVOID game27_dll_offsets[] = {
 		GAME_DLL_128,
 		GAME_DLL_127B,
@@ -114,7 +116,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 	const DWORD base_game28_dll_offsets[] = {
 		BASE_GAME_DLL_128E,
 		BASE_GAME_DLL_128D,
-		BASE_GAME_DLL_128E,
 	};
 	const DWORD base_game27_dll_offsets[] = {
 		BASE_GAME_DLL_128,
@@ -132,14 +133,17 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 	GetStartupInfo(&startupinfo);
 	commandline = GetCommandLine();
 
+	// load NtQueryInformationProcess once
+	sm_LoadNTDLLFunctions();
+
 	// First try Warcrat III.exe
 	if (!CreateProcess(L"Warcraft III.exe", commandline, 0, 0, FALSE, CREATE_SUSPENDED, 0, 0, &startupinfo, &processinfo)) {
 		MessageBoxA(0, WAR3_NOT_FOUND_ERR, "Error", MB_OK);
 		ExitProcess(2);
 	}
 	debug("Warcraft III.exe:\r\n");
-	baseAddr = GetProcessBaseAddressWinapi(processinfo.hProcess);
-	debug("base winapi: %x\r\n", baseAddr);
+	baseAddr = GetProcessBaseAddress(processinfo.hThread, processinfo.hProcess);
+	debug("Base: %x\r\n", baseAddr);
 	
 	// 1.28d+
 	for (i = 0; i < 2; i++) {
@@ -169,8 +173,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 			ExitProcess(2);
 		}
 
-		baseAddr = GetProcessBaseAddressWinapi(processinfo.hProcess);
-		debug("War3.exe:\r\n");
+		debug("war3.exe:\r\n");
+		baseAddr = GetProcessBaseAddress(processinfo.hThread, processinfo.hProcess);		
 		debug("base: %x\r\n", baseAddr);
 
 		// 1.27a+
@@ -288,9 +292,18 @@ int InjectDll(PROCESS_INFORMATION processinfo, LPCVOID offset, LPCVOID helper) {
 	return 0;
 }
 
+// First try WinAPI call, in case of error try ebx hack
+DWORD GetProcessBaseAddress(HANDLE hThread, HANDLE hProcess) {
+	DWORD   baseAddress;
+	baseAddress = GetProcessBaseAddressWinapi(hProcess);
+	if (baseAddress != 0xFFFFFFFF)
+		return baseAddress;
+	return GetProcessBaseAddressEbx(hThread, hProcess);
+}
+
 // Dirty Hack. Don't try to do this at home!
 // Takes value at (ebx + 8) and surprizingly it's exe base address
-DWORD GetProcessBaseAddress(HANDLE hThread, HANDLE hProcess)
+DWORD GetProcessBaseAddressEbx(HANDLE hThread, HANDLE hProcess)
 {
 	DWORD   baseAddress = 0xFFFFFFFF;
 	DWORD ebx;
@@ -313,12 +326,11 @@ DWORD GetProcessBaseAddress(HANDLE hThread, HANDLE hProcess)
 
 DWORD GetProcessBaseAddressWinapi(HANDLE hProcess)
 {
-	sm_LoadNTDLLFunctions();
-
 	debug("NtQueryInformationProcess start\r\n");
 
-	DWORD   baseAddress = 0xFFFFFFFF;
+	DWORD baseAddress = 0xFFFFFFFF;
 	
+	DWORD pebBaseAddress;
 	DWORD dwSize = 0;
 	DWORD dwSizeNeeded = 0;
 	DWORD dwBytesRead = 0;
@@ -375,11 +387,13 @@ DWORD GetProcessBaseAddressWinapi(HANDLE hProcess)
 	if (dwStatus >= 0)
 	{
 		debug("NtQueryInformationProcess success\r\n");
-		baseAddress = (DWORD)pbi->PebBaseAddress;
+		pebBaseAddress = (DWORD)pbi->PebBaseAddress;
+		if (pbi)
+			HeapFree(hHeap, 0, pbi);
 
 		SIZE_T numread = 0;
 		char buf[4];
-		if (!ReadProcessMemory(hProcess, (LPCVOID)(baseAddress + 8), buf, 4, &numread)) {
+		if (!ReadProcessMemory(hProcess, (LPCVOID)(pebBaseAddress + 8), buf, 4, &numread)) {
 			debug("Can't read base address (winapi)\r\n");
 			return 0xFFFFFFFF;
 		}
