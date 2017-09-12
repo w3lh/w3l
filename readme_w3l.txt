@@ -25,6 +25,8 @@ Latest releases of w3l @ https://github.com/w3lh/w3l/releases
 PvPGN forums @ http://pelish.spfree.net/
 
 Changelog:
+ Version 1.5.1.1
+   * Removed debug output from exe
 
  Version 1.5.1.0
    * Fixed wine support for War3 1.28d+
