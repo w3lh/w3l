@@ -39,16 +39,22 @@ DWORD GetProcessBaseAddress(HANDLE hThread, HANDLE hProcess);
 DWORD GetProcessBaseAddressEbx(HANDLE hThread, HANDLE hProcess);
 DWORD GetProcessBaseAddressWinapi(HANDLE hProcess);
 HMODULE sm_LoadNTDLLFunctions();
+void PatchTrampoline(int offset, DWORD value);
 
 #define VERSION "1.29a"
 
 #define DLL_NAME TEXT("w3lh29.dll")
 
+#define WORKER_NAME "applyPatches"
+
 #define WAR3_NOT_FOUND_ERR TEXT("Could not start Warcraft III.exe! Make sure the loader is in your Warcraft III install directory.")
 #define DLL_NOT_FOUND_ERR TEXT("Could not find ") DLL_NAME TEXT("! Make sure the loader dll is in your Warcraft III install directory.")
 #define ALLOCATE_ERR TEXT("Could not find allocate memory in Warcraft III.exe process!")
+#define READ_CTX_ERR TEXT("Could not read Warcraft III.exe process context!")
+#define WRITE_CTX_ERR TEXT("Could not write Warcraft III.exe process context!")
 #define WRITE_ERR TEXT("Could not find write memory in Warcraft III.exe process!")
 #define LOADLIB_ERR TEXT("Could not find LoadLibrary address!")
+#define GETPROC_ERR TEXT("Could not find GetProcAddress address!")
 #define REMOTE_THREAD_ERR TEXT("Could not execute remote thread!")
 unsigned char DEPPatchNew[] = { 0x80, 0x00, 0xF3 };
 unsigned char DEPPatchOrig[] = { 0x81, 0x01, 0xF4 };
@@ -59,7 +65,47 @@ unsigned char DEPPatchOrig[] = { 0x81, 0x01, 0xF4 };
 #define LOAD_LIB_FUNC_NAME "LoadLibraryA"
 #endif
 
-/* Load war3.exe. Inject wl29.dll */
+unsigned char trampoline[] = {
+	// push imm32 - save executable entry point to return
+	0x68, 0xDE, 0xAD, 0xBE, 0xEF,
+	// pushfd - save flags
+	0x9C,
+	// pushad - save registers
+	0x60,
+	// push imm32 - put LoadLibrary argument(path to injected dll) to stack
+	0x68, 0xDE, 0xAD, 0xBE, 0xEF,
+	// mov eax, imm32 - put LoadLibrary address to EAX
+	0xB8, 0xDE, 0xAD, 0xBE, 0xEF,
+	// call eax - LoadLibrary(lpRemoteDLLPathAddr)	
+	0xFF, 0xD0,
+	// push imm32 - put dll's worker function name address
+	0x68, 0xDE, 0xAD, 0xBE, 0xEF,
+	// push eax - save handler from LoadLibrary
+	0x50,
+	// mov eax, imm32 - put GetProcAddress address to EAX
+	0xB8, 0xDE, 0xAD, 0xBE, 0xEF,
+	// call eax - GetProcAddress(hModule, lpRemoteDLLWorkerNameAddr)	
+	0xFF, 0xD0,
+	// push imm32 - put dll's worker function argument address
+	0x68, 0xDE, 0xAD, 0xBE, 0xEF,
+	// call eax - call dll worker	
+	0xFF, 0xD0,
+	// add esp, 8 - Fix stack pointer, worker proc is __cdecl
+	0x83, 0xC4, 0x04,
+	// popad - restore registers
+	0x61,
+	// popfd - restore flags
+	0x9D,
+	// retn
+	0xC3
+};
+
+struct workerOptsSt {
+	DWORD_PTR baseAddr;
+	CONTEXT ctx;
+} workerOptions;
+
+/* Load war3.exe. Inject w3lh29.dll */
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nShowCmd) {
 	STARTUPINFO startupinfo;
 	DWORD_PTR baseAddr;
@@ -70,11 +116,12 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 	HANDLE hDLLFile;
 	DWORD dllFileSize;
 	TCHAR fullPath[1024];
-	LPVOID lpRemoteDLLPathAddr;
-	LPVOID lpLoadLibAddr;
+	LPVOID lpRemoteDLLPathAddr, lpRemoteDLLWorkerNameAddr, lpRemoteWorkerOptsAddr, lpRemoteTrampolineAddr;
+	LPVOID lpLoadLibAddr, lpGetProcAddr;
 	HANDLE hDLLThread;
 	HANDLE hKernel32;
 	DWORD thread;
+	CONTEXT contx;
 
 	GetStartupInfo(&startupinfo);
 	commandline = GetCommandLine();
@@ -87,9 +134,12 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 		MessageBox(NULL, WAR3_NOT_FOUND_ERR, TEXT("Loader Error"), MB_OK);
 		ExitProcess(2);
 	}
+	// Get W3 executable base address
 	baseAddr = GetProcessBaseAddress(processinfo.hThread, processinfo.hProcess);
 	debug("Base: %x\r\n", baseAddr);
+	workerOptions.baseAddr = baseAddr;
 
+	// Get inject dll full path
 	GetFullPathName(DLL_NAME, 1024, fullPath, NULL);
 	debug("Full dll path: %ls\r\n", fullPath);
 	hDLLFile = CreateFile(fullPath, GENERIC_READ, 0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
@@ -100,7 +150,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 	}
 	CloseHandle(hDLLFile);
 
-	lpRemoteDLLPathAddr = VirtualAllocEx(processinfo.hProcess, 0, (_tcslen(fullPath) + 1) * sizeof(TCHAR) + 2, MEM_RESERVE | MEM_COMMIT, PAGE_EXECUTE_READWRITE);
+	// Write full path to the remote process, patch trampoline
+	lpRemoteDLLPathAddr = VirtualAllocEx(processinfo.hProcess, 0, (_tcslen(fullPath) + 1) * sizeof(TCHAR) + 2, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
 	debug("Remote DLL path: 0x%X\r\n", lpRemoteDLLPathAddr);
 	if (lpRemoteDLLPathAddr == NULL) {
 		TerminateProcess(processinfo.hProcess, 1);
@@ -112,6 +163,24 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 		MessageBox(NULL, WRITE_ERR, TEXT("Loader Error"), MB_OK);
 		ExitProcess(2);
 	}
+	PatchTrampoline(8, (DWORD)lpRemoteDLLPathAddr);
+
+	// Write worker proc name to the remote process, patch trampoline
+	lpRemoteDLLWorkerNameAddr = VirtualAllocEx(processinfo.hProcess, 0, strlen(WORKER_NAME) + 1, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
+	debug("Remote DLL worker name addr: 0x%X\r\n", lpRemoteDLLWorkerNameAddr);
+	if (lpRemoteDLLWorkerNameAddr == NULL) {
+		TerminateProcess(processinfo.hProcess, 1);
+		MessageBox(NULL, ALLOCATE_ERR, TEXT("Loader Error"), MB_OK);
+		ExitProcess(2);
+	}
+	if (!WriteProcessMemory(processinfo.hProcess, lpRemoteDLLWorkerNameAddr, WORKER_NAME, strlen(WORKER_NAME) + 1, NULL)) {
+		TerminateProcess(processinfo.hProcess, 1);
+		MessageBox(NULL, WRITE_ERR, TEXT("Loader Error"), MB_OK);
+		ExitProcess(2);
+	}
+	PatchTrampoline(20, (DWORD)lpRemoteDLLWorkerNameAddr);
+
+	// Get LoadLibrary Proc address, patch trampoline
 	hKernel32 = GetModuleHandle(TEXT("kernel32.dll"));
 	lpLoadLibAddr = GetProcAddress(hKernel32, LOAD_LIB_FUNC_NAME);
 	if (lpLoadLibAddr == NULL) {
@@ -120,44 +189,88 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 		ExitProcess(2);
 	}
 	debug("LoadLibrary address: 0x%X\r\n", lpLoadLibAddr);
+	PatchTrampoline(13, (DWORD)lpLoadLibAddr);
+
+	// Get GetProcAddress Proc address, patch trampoline
+	lpGetProcAddr = GetProcAddress(hKernel32, "GetProcAddress");
+	if (lpGetProcAddr == NULL) {
+		TerminateProcess(processinfo.hProcess, 1);
+		MessageBox(NULL, GETPROC_ERR, TEXT("Loader Error"), MB_OK);
+		ExitProcess(2);
+	}
+	debug("GetProcAddress address: 0x%X\r\n", lpGetProcAddr);
+	PatchTrampoline(26, (DWORD)lpGetProcAddr);
+
+	// Get main thread context
+	contx.ContextFlags = CONTEXT_ALL;
+	if (GetThreadContext(processinfo.hThread, &contx) == 0) {
+		TerminateProcess(processinfo.hProcess, 1);
+		MessageBox(NULL, READ_CTX_ERR, TEXT("Loader Error"), MB_OK);
+		ExitProcess(2);
+	}
+	workerOptions.ctx = contx;
+	// save return address
+	PatchTrampoline(1, contx.Eip);
+
+	// Write worker options to the remote process, patch trampoline
+	lpRemoteWorkerOptsAddr = VirtualAllocEx(processinfo.hProcess, 0, sizeof(workerOptions), MEM_RESERVE | MEM_COMMIT, PAGE_EXECUTE_READWRITE);
+	debug("Remote worker options addr: 0x%X\r\n", lpRemoteWorkerOptsAddr);
+	if (lpRemoteWorkerOptsAddr == NULL) {
+		TerminateProcess(processinfo.hProcess, 1);
+		MessageBox(NULL, ALLOCATE_ERR, TEXT("Loader Error"), MB_OK);
+		ExitProcess(2);
+	}
+	if (!WriteProcessMemory(processinfo.hProcess, lpRemoteWorkerOptsAddr, &workerOptions, sizeof(workerOptions), NULL)) {
+		TerminateProcess(processinfo.hProcess, 1);
+		MessageBox(NULL, WRITE_ERR, TEXT("Loader Error"), MB_OK);
+		ExitProcess(2);
+	}
+	PatchTrampoline(33, (DWORD)lpRemoteWorkerOptsAddr);
+
+	// Write trampoline
+	lpRemoteTrampolineAddr = VirtualAllocEx(processinfo.hProcess, 0, sizeof(trampoline), MEM_RESERVE | MEM_COMMIT, PAGE_EXECUTE_READWRITE);
+	debug("Remote trampouline addr: 0x%X\r\n", lpRemoteTrampolineAddr);
+	if (lpRemoteTrampolineAddr == NULL) {
+		TerminateProcess(processinfo.hProcess, 1);
+		MessageBox(NULL, ALLOCATE_ERR, TEXT("Loader Error"), MB_OK);
+		ExitProcess(2);
+	}
+	if (!WriteProcessMemory(processinfo.hProcess, lpRemoteTrampolineAddr, trampoline, sizeof(trampoline), NULL)) {
+		TerminateProcess(processinfo.hProcess, 1);
+		MessageBox(NULL, WRITE_ERR, TEXT("Loader Error"), MB_OK);
+		ExitProcess(2);
+	}
+	contx.Eip = (DWORD)lpRemoteTrampolineAddr;
+	
+	// Set EIP to the trampoline address
+	if (SetThreadContext(processinfo.hThread, &contx) == 0) {
+		TerminateProcess(processinfo.hProcess, 1);
+		MessageBox(NULL, READ_CTX_ERR, TEXT("Loader Error"), MB_OK);
+		ExitProcess(2);
+	}
+
+	/*
 	hDLLThread = CreateRemoteThread(processinfo.hProcess, NULL, 0, lpLoadLibAddr, lpRemoteDLLPathAddr, 0, &thread);
-	dllFileSize = GetLastError();
 	if (hDLLThread == NULL) {
 		TerminateProcess(processinfo.hProcess, 1);
 		MessageBox(NULL, REMOTE_THREAD_ERR, TEXT("Loader Error"), MB_OK);
 		ExitProcess(2);
 	}
 	WaitForSingleObject(hDLLThread, INFINITE);
+	*/
 
-	/*
-	hDLLFile = CreateFile(fullPath, GENERIC_READ, 0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
-	if (hDLLFile == INVALID_HANDLE_VALUE) {
-		TerminateProcess(processinfo.hProcess, 1);
-		MessageBox(NULL, DLL_NOT_FOUND_ERR, TEXT("Loader Error"), MB_OK);
-		ExitProcess(2);
-	}
-	
-	dllFileSize = GetFileSize(hDLLFile, NULL);
-	debug("DLL size: %ld\r\n", dllFileSize);
-	lpRemoteDLLAddr = VirtualAllocEx(processinfo.hProcess, NULL, dllFileSize, MEM_RESERVE | MEM_COMMIT, PAGE_EXECUTE_READWRITE);
-	debug("Remote dll address: 0x%X\r\n", lpRemoteDLLAddr);
-	lpBuffer = HeapAlloc(GetProcessHeap(), 0, dllFileSize);
-	if (lpBuffer == NULL) {
-		TerminateProcess(processinfo.hProcess, 1);
-		MessageBox(NULL, TEXT("Couldn't allocate memory"), TEXT("Loader Error"), MB_OK);
-		ExitProcess(2);
-	}
-	if (!ReadFile(hDLLFile, lpBuffer, dllFileSize, &dwBytesRead, NULL) || dwBytesRead != dllFileSize)
-	{
-		TerminateProcess(processinfo.hProcess, 1);
-		MessageBox(NULL, DLL_NOT_READ_ERR, TEXT("Loader Error"), MB_OK);
-		ExitProcess(2);
-	}
-	WriteProcessMemory(processinfo.hProcess, lpRemoteDLLAddr, lpBuffer, dllFileSize, NULL);*/
 	ResumeThread(processinfo.hThread);
 	ExitProcess(0);
 }
 
+// Fix address in trampouline
+void PatchTrampoline(int offset, DWORD value)
+{
+	trampoline[offset] = ((unsigned char *)&value)[0];
+	trampoline[offset + 1] = ((unsigned char *)&value)[1];
+	trampoline[offset + 2] = ((unsigned char *)&value)[2];
+	trampoline[offset + 3] = ((unsigned char *)&value)[3];
+}
 
 // First try WinAPI call, in case of error try ebx hack
 DWORD GetProcessBaseAddress(HANDLE hThread, HANDLE hProcess) {
