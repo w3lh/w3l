@@ -1,0 +1,31 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio 14
+VisualStudioVersion = 14.0.24720.0
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "w3lh", "dll.vcxproj", "{1594837E-9D24-4840-949B-F0BA2B56B232}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug_|Win32 = Debug_|Win32
+		Debug_SRP3|Win32 = Debug_SRP3|Win32
+		Release_SRP3|Win32 = Release_SRP3|Win32
+		Release|Win32 = Release|Win32
+		WIN98_Release|Win32 = WIN98_Release|Win32
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{1594837E-9D24-4840-949B-F0BA2B56B232}.Debug_|Win32.ActiveCfg = Debug_|Win32
+		{1594837E-9D24-4840-949B-F0BA2B56B232}.Debug_|Win32.Build.0 = Debug_|Win32
+		{1594837E-9D24-4840-949B-F0BA2B56B232}.Debug_SRP3|Win32.ActiveCfg = Debug_SRP3|Win32
+		{1594837E-9D24-4840-949B-F0BA2B56B232}.Debug_SRP3|Win32.Build.0 = Debug_SRP3|Win32
+		{1594837E-9D24-4840-949B-F0BA2B56B232}.Release_SRP3|Win32.ActiveCfg = Release_SRP3|Win32
+		{1594837E-9D24-4840-949B-F0BA2B56B232}.Release_SRP3|Win32.Build.0 = Release_SRP3|Win32
+		{1594837E-9D24-4840-949B-F0BA2B56B232}.Release|Win32.ActiveCfg = Release|Win32
+		{1594837E-9D24-4840-949B-F0BA2B56B232}.Release|Win32.Build.0 = Release|Win32
+		{1594837E-9D24-4840-949B-F0BA2B56B232}.WIN98_Release|Win32.ActiveCfg = WIN98_Release|Win32
+		{1594837E-9D24-4840-949B-F0BA2B56B232}.WIN98_Release|Win32.Build.0 = WIN98_Release|Win32
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+EndGlobal
